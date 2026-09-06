@@ -1,0 +1,27 @@
+# Frame of the Day - configuration
+
+frame:
+  path: assets/frame.png
+  # Rectangle inside the frame image where the artwork goes (pixels, from
+  # the frame image's top-left corner).
+  aperture: {x: 1000, y: 190, width: 587, height: 411}
+
+# How far an artwork's aspect ratio may deviate from the aperture's before
+# falling back to "contain" instead of "cover" (0.15 = +/-15%).
+aspect_ratio_tolerance: 0.15
+
+# "cover"   -> artwork fills the aperture, cropping overflow
+# "contain" -> whole artwork visible, padded with passepartout_color
+fit_mode: cover
+passepartout_color: [245, 242, 235]
+
+art_list:
+  path: art_list.json
+
+output:
+  local_dir: output
+  auto_teams: false  # if true, every run also writes into the Teams uploads folder
+
+history:
+  path: history.json
+  cooldown_days: 30  # don't reuse an artwork within this many days
