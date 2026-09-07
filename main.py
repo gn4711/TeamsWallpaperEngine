@@ -34,6 +34,51 @@ def load_config(config_path: Path) -> dict:
         return yaml.safe_load(f)
 
 
+def _manage_slots(list_slots: bool, use_slot: str | None) -> None:
+    folder = teams_output.find_teams_uploads_folder()
+    if folder is None:
+        typer.secho("Could not auto-detect the Teams uploads folder.", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
+    state_path = Path(teams_output.SLOT_STATE_FILENAME)
+
+    if list_slots:
+        current, _ = teams_output.load_or_create_slot(state_path)
+        backgrounds = teams_output.list_custom_backgrounds(folder)
+        if not backgrounds:
+            typer.echo(f"No custom backgrounds found in {folder}")
+            return
+        typer.echo(f"Custom backgrounds in {folder}:\n")
+        for guid, path in backgrounds:
+            marker = "  <- current slot" if guid == current else ""
+            size_kb = path.stat().st_size // 1024
+            typer.echo(f"  {guid}{path.suffix}  {size_kb:>6} KB{marker}")
+        typer.echo(
+            "\nOpen that folder as thumbnails to see which one you have selected "
+            "in Teams, then run:\n  --use-slot <guid>"
+        )
+        return
+
+    if use_slot is None:
+        return
+
+    try:
+        backup = teams_output.adopt_slot(state_path, use_slot, folder)
+    except ValueError:
+        typer.secho(f"'{use_slot}' is not a valid GUID.", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
+    typer.secho(f"Slot set to {use_slot}", fg=typer.colors.GREEN)
+    if backup:
+        typer.echo(f"Original backed up to: {backup.name}")
+    else:
+        typer.secho(
+            "Note: no existing file with that GUID - Teams won't show it until "
+            "you select it once.",
+            fg=typer.colors.YELLOW,
+        )
+
+
 @app.command()
 def main(
     config: Path = typer.Option(Path("config.yaml"), "--config", help="Path to config YAML"),
@@ -41,7 +86,19 @@ def main(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Only show which artwork would be chosen, write nothing"
     ),
+    list_slots: bool = typer.Option(
+        False, "--list-slots", help="List existing Teams custom backgrounds and exit"
+    ),
+    use_slot: str = typer.Option(
+        None,
+        "--use-slot",
+        help="Take over an existing Teams background by GUID (backs the original up)",
+    ),
 ):
+    if list_slots or use_slot:
+        _manage_slots(list_slots, use_slot)
+        return
+
     cfg = load_config(config)
 
     frame_path = Path(cfg["frame"]["path"])
@@ -127,8 +184,20 @@ def main(
                 fg=typer.colors.YELLOW,
             )
         else:
-            full_path, thumb_path = teams_output.write_background(result, teams_folder)
+            slot_guid, is_new_slot = teams_output.load_or_create_slot(
+                Path(teams_output.SLOT_STATE_FILENAME)
+            )
+            full_path, thumb_path = teams_output.write_background(
+                result, teams_folder, slot_guid
+            )
             typer.echo(f"Written to Teams: {full_path.name} (+ thumbnail)")
+            if is_new_slot:
+                typer.secho(
+                    "First run with this background slot: open Teams' background "
+                    "picker and select the new thumbnail once. Future runs overwrite "
+                    "that same entry, so it stays selected.",
+                    fg=typer.colors.CYAN,
+                )
 
     history.record_usage(history_path, artwork.id, artwork.title, artwork.artist)
 

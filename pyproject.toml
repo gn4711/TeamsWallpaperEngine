@@ -10,3 +10,9 @@ dependencies = [
     "requests>=2.34.2",
     "typer>=0.27.2",
 ]
+
+# PyPI is blocked on the corporate network; resolve through the internal proxy feed.
+[[tool.uv.index]]
+name = "packagefeedproxy"
+url = "https://packagefeedproxy.microsoft.io/pypi/simple/"
+default = true

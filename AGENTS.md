@@ -27,11 +27,24 @@ are ever run directly. `art_list.py`, `matcher.py`, `compositor.py`,
   top of that file, not config - it's a one-off tool, not part of the daily run.
   Resist moving them back into `config.yaml`.
 
-- **Teams background selection cannot be automated.** There is no API for
-  "set the active background." `teams_output.write_background()` can only drop a
-  `fotd_<uuid>.jpg` / `fotd_<uuid>_thumb.jpg` pair into Teams' Uploads folder so it
-  *appears* in the picker; a human still has to click it, every day. Don't imply
-  otherwise in docs or code comments.
+- **Teams background selection is automated via a stable slot, not an API.** There
+  is still no API for "set the active background." What works instead: Teams
+  records the selected background by GUID and re-reads that file's *contents*, so
+  `teams_output.write_background()` overwrites one fixed GUID pair in place every
+  run. The GUID lives in `teams_slot.json` (generated, gitignored-worthy) - don't
+  regenerate it per run, that was the original bug. Either the script mints its own
+  (user selects it once) or `--use-slot` adopts one the user already has selected,
+  which needs no clicking at all; `adopt_slot()` backs up the original first,
+  because taking over a slot destroys the image that was there.
+
+- **Teams background filenames must be bare GUIDs.** `<guid>.<ext>` +
+  `<guid>_thumb.<ext>`. An earlier version prefixed them (`fotd_<guid>.jpg`) so
+  cleanup could identify its own files; Teams silently refused to list those,
+  because the stem no longer parses as a GUID. Don't reintroduce a prefix, suffix,
+  or any decoration - ownership is tracked in `teams_slot.json` instead.
+  The extension must also match whatever already exists for that GUID (adopted
+  slots are often `.png`); writing a fixed `.jpeg` leaves Teams reading the
+  untouched original. 
 
 - **Never hardcode the new-Teams package folder name.** It's
   `Packages/MSTeams_<publisher-hash>` under `%LOCALAPPDATA%`. The hash suffix
@@ -39,6 +52,11 @@ are ever run directly. `art_list.py`, `matcher.py`, `compositor.py`,
   bug, not a placeholder - Edge/.NET/etc. all share it), but hardcoding the exact
   folder name once already broke detection when questioned. Current code globs
   `Packages/MSTeams_*` in `find_teams_uploads_folder()` - keep it that way.
+
+- **Only new Teams (2.x) paths are probed.** Classic Teams 1.x is retired, and
+  its path used to be checked *first* - a leftover install would shadow the real
+  folder and every run would write where current Teams never reads, presenting as
+  "the script does nothing." Don't re-add fallback paths for older clients.
 
 - **`art_list.json` is generated, not hand-authored.** 1000 real entries pulled
   from Wikidata (title, artist, year, image URL, aspect ratio from physical
